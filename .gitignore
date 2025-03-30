@@ -1,0 +1,117 @@
+### CMake ###
+# Build directories
+build/
+Build/
+CMakeFiles/
+CMakeScripts/
+cmake-build*/
+CMakeCache.txt
+CMakeDoxyfile.in
+CMakeDoxygenDefaults
+CMakeLists.txt.user
+.cmake
+
+# Generated files
+*.cmake
+*.cbp
+Makefile
+install_manifest.txt
+compile_commands.json
+CTestTestfile.cmake
+
+### C++ ###
+# Compiled Object files
+*.o
+*.ko
+*.obj
+*.elf
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Static/Dynamic libraries
+*.a
+*.la
+*.lib
+*.dll
+*.so
+*.so.*
+*.dylib
+
+# Executables
+*.exe
+*.out
+*.app
+
+### IDE ###
+# Visual Studio
+.vs/
+*.vcxproj
+*.vcxproj.filters
+*.sln
+*.vcxproj.user
+
+# Xcode
+*.xcodeproj/
+xcuserdata/
+
+# CLion
+.idea/
+cmake-build-*/
+
+# VS Code
+.vscode/
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+### Temporary files ###
+*.swp
+*.swo
+*~
+*.user
+*.suo
+*.sdf
+*.opensdf
+*.ncb
+*.opendb
+*.fdb_latexmk
+
+### Autotools ###
+autom4te.cache
+aclocal.m4
+config.h.in
+config.guess
+config.sub
+configure
+depcomp
+install-sh
+libtool
+ltmain.sh
+m4/
+missing
+stamp-h1
+
+### Testing ###
+Testing/
+CTestTestResults.cmake
+*.log
+
+### Package files ###
+*.deb
+*.rpm
+*.tar.gz
+*.zip
+
+### Dependency directories ###
+External/
+deps/
+third_party/
+
+### MacOS ###
+.DS_Store
+
+### Windows ###
+Thumbs.db

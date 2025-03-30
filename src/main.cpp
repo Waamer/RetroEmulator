@@ -7,7 +7,8 @@
 #include <iostream>
 #include <filesystem>
 #include <vector>
-#include "ui.h"
+#include <cstdlib>
+#include "sdl_ui.h"
 #include "emulator_launcher.h"
 
 namespace fs = std::filesystem;
@@ -41,11 +42,22 @@ std::vector<std::string> scanForRoms(const fs::path& gamesDir) {
  * and runs the main game selection loop
  */
 int main() {
-    // Initialize the user interface system
-    UI ui;
+    // Initialize the SDL-based user interface system
+    SDLUI ui;
     if (!ui.init()) {
         std::cerr << "Failed to initialize UI" << std::endl;
         return 1;
+    }
+
+    // Initialize IGDB client with hardcoded credentials
+    // Note: IGDB is optional, the app will work without it
+    try {
+        if (!ui.initIGDB("sa09yuxskyo4guu5d1pgntjoc3ucw0", "wu99x3crhhckdbqb41hw5u7q4sjbao")) {
+            std::cerr << "Warning: Failed to initialize IGDB client. Using basic metadata." << std::endl;
+        }
+    } catch (const std::exception& e) {
+        std::cerr << "Warning: IGDB initialization error: " << e.what() << std::endl;
+        std::cerr << "Continuing with basic metadata..." << std::endl;
     }
 
     // Set up the emulator launcher with nestopia emulator

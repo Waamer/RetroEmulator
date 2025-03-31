@@ -1,6 +1,6 @@
 # Retro Gaming Console
 
-A C++ application that runs on Raspberry Pi OS to manage and launch NES games through an emulator.
+A C++ application that runs on Linux to manage and launch NES games through an emulator.
 
 ## Features
 

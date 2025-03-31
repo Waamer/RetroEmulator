@@ -11,7 +11,7 @@ A C++ application that runs on Raspberry Pi OS to manage and launch NES games th
 
 ## Prerequisites
 
-- Raspberry Pi OS
+- A Linux based operating system (We used VirtualBox Ubuntu for developing/testing)
 - C++ compiler with C++17 support
 - CMake (version 3.10 or higher)
 - SDL2 library
@@ -79,8 +79,6 @@ Replace `/path/to/your/project` with the actual path to the project directory. T
 - `src/emulator_launcher.h/cpp` - Emulator integration
 - `games/` - Directory for storing ROM files
 - `CMakeLists.txt` - CMake build configuration
-
-5. Create a Pull Request
 
 ## Note
 

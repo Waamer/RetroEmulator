@@ -28,7 +28,7 @@ sudo apt-get install build-essential cmake libsdl2-dev nestopia
 2. Clone the repository:
 ```bash
 git clone [repository-url]
-cd retro-console
+cd RetroEmulator
 ```
 
 3. Create build directory and build the project:

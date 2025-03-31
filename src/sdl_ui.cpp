@@ -1,3 +1,9 @@
+/**
+ * @file sdl_ui.h
+ * @brief Implementation of the SDLUI class for rendering a game launcher UI using SDL.
+ * @author Talha and Waleed
+ */
+
 #include "sdl_ui.h"
 #include <algorithm>
 #include <filesystem>
@@ -7,6 +13,9 @@
 
 namespace fs = std::filesystem;
 
+/**
+ * @brief Constructs an SDLUI object and initializes colors.
+ */
 SDLUI::SDLUI() : window(nullptr), renderer(nullptr), font(nullptr), initialized(false),
                  selectedIndex(0), gameSelected(false), igdbInitialized(false) {
     // Initialize colors
@@ -16,11 +25,18 @@ SDLUI::SDLUI() : window(nullptr), renderer(nullptr), font(nullptr), initialized(
     errorColor = {255, 0, 0, 255};          // Red
     linkColor = {0, 120, 215, 255};         // Blue for links
 }
-
+/**
+ * @brief Destroys the SDLUI object and cleans up resources.
+ */
 SDLUI::~SDLUI() {
+    clearTextureCache();
     cleanup();
 }
 
+/**
+ * @brief Initializes SDL, SDL_ttf, and SDL_image for rendering.
+ * @return True if initialization succeeds, false otherwise.
+ */
 bool SDLUI::init() {
     if (SDL_Init(SDL_INIT_VIDEO) < 0) {
         std::cerr << "SDL could not initialize! SDL_Error: " << SDL_GetError() << std::endl;
@@ -67,6 +83,12 @@ bool SDLUI::init() {
     return true;
 }
 
+/**
+ * @brief Initializes the IGDB client for retrieving game metadata.
+ * @param client_id The client ID for IGDB API authentication.
+ * @param client_secret The client secret for IGDB API authentication.
+ * @return Always returns true (functionality is optional).
+ */
 bool SDLUI::initIGDB(const std::string& client_id, const std::string& client_secret) {
     igdbInitialized = igdbClient.init(client_id, client_secret);
     if (!igdbInitialized) {
@@ -75,8 +97,17 @@ bool SDLUI::initIGDB(const std::string& client_id, const std::string& client_sec
     return true; // Always return true as this is optional functionality
 }
 
+/**
+ * @brief Loads an image file into an SDL texture.
+ * @param path The file path of the image.
+ * @return The loaded SDL_Texture or nullptr if loading fails.
+ */
 SDL_Texture* SDLUI::loadTextureFromFile(const std::string& path) {
-    // First try to load the image from the specified path
+    auto it = textureCache.find(path);
+    if (it != textureCache.end()) {
+        return it->second;
+    }
+
     SDL_Surface* surface = IMG_Load(path.c_str());
     if (!surface) {
         std::cerr << "Failed to load image " << path << "! SDL_image Error: " << IMG_GetError() << std::endl;
@@ -94,20 +125,35 @@ SDL_Texture* SDLUI::loadTextureFromFile(const std::string& path) {
     SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, surface);
     if (!texture) {
         std::cerr << "Failed to create texture from " << path << "! SDL Error: " << SDL_GetError() << std::endl;
+        SDL_FreeSurface(surface);
+        return nullptr;
     }
 
     SDL_FreeSurface(surface);
+    textureCache[path] = texture;
     return texture;
 }
 
+/**
+ * @brief Loads metadata for a list of games.
+ * @param games A vector containing game filenames.
+ */
 void SDLUI::loadGameMetadata(const std::vector<std::string>& games) {
     std::cout << "Loading metadata for " << games.size() << " games..." << std::endl;
     gameList.clear();
+    
+    // Pre-allocate space for better performance
+    gameList.reserve(games.size());
     
     for (const auto& game : games) {
         try {
             std::cout << "Processing game: " << game << std::endl;
             gameList.push_back(igdbClient.fetchGameMetadata(game));
+            
+            // Pre-load the cover image texture if available
+            if (!gameList.back().imagePath.empty()) {
+                loadTextureFromFile(gameList.back().imagePath);
+            }
         } catch (const std::exception& e) {
             std::cerr << "Error processing game " << game << ": " << e.what() << std::endl;
             // Create basic metadata for this game
@@ -125,29 +171,31 @@ void SDLUI::loadGameMetadata(const std::vector<std::string>& games) {
     std::cout << "Finished loading metadata for " << gameList.size() << " games" << std::endl;
 }
 
+/**
+ * @brief Renders text onto the screen at a specified position.
+ * @param text The text string to render.
+ * @param x The x-coordinate for rendering.
+ * @param y The y-coordinate for rendering.
+ * @param color The SDL_Color to use for text rendering.
+ */
 void SDLUI::renderText(const std::string& text, int x, int y, const SDL_Color& color) {
     if (!font) return;
 
-    SDL_Surface* surface = TTF_RenderText_Blended(font, text.c_str(), color);
-    if (!surface) {
-        std::cerr << "Failed to render text surface! TTF_Error: " << TTF_GetError() << std::endl;
-        return;
-    }
+    SDL_Texture* texture = getOrCreateTextTexture(text, color);
+    if (!texture) return;
 
-    SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, surface);
-    if (!texture) {
-        std::cerr << "Failed to create texture from rendered text! SDL_Error: " << SDL_GetError() << std::endl;
-        SDL_FreeSurface(surface);
-        return;
-    }
-
-    SDL_Rect dstRect = {x, y, surface->w, surface->h};
+    int w, h;
+    SDL_QueryTexture(texture, NULL, NULL, &w, &h);
+    SDL_Rect dstRect = {x, y, w, h};
     SDL_RenderCopy(renderer, texture, NULL, &dstRect);
-
-    SDL_FreeSurface(surface);
-    SDL_DestroyTexture(texture);
 }
 
+/**
+ * @brief Renders wrapped text within a specified boundary.
+ * @param text The text string to render.
+ * @param bounds The SDL_Rect specifying the text boundaries.
+ * @param color The SDL_Color to use for text rendering.
+ */
 void SDLUI::renderWrappedText(const std::string& text, const SDL_Rect& bounds, const SDL_Color& color) {
     if (text.empty()) {
         return;
@@ -158,6 +206,13 @@ void SDLUI::renderWrappedText(const std::string& text, const SDL_Rect& bounds, c
     int y = bounds.y;
     int lineWidth = bounds.w;
     int linesRendered = 0;
+    
+    // Check if this text should have a Read More link
+    bool shouldAddReadMore = text.find(" Read More") != std::string::npos;
+    if (shouldAddReadMore) {
+        // Remove the " Read More" from the text before processing
+        remainingText = text.substr(0, text.find(" Read More"));
+    }
     
     while (!remainingText.empty() && linesRendered < MAX_DESCRIPTION_LINES) {
         // Calculate how many characters fit in one line
@@ -187,8 +242,8 @@ void SDLUI::renderWrappedText(const std::string& text, const SDL_Rect& bounds, c
         // Extract and render the line
         std::string line = remainingText.substr(0, lineEnd);
         
-        // If this is the second line and there's more text, add "Read More"
-        if (linesRendered == 1 && !remainingText.empty()) {
+        // If this is the second line and we should add Read More
+        if (linesRendered == 1 && shouldAddReadMore) {
             // Calculate how much space we need for "Read More"
             int readMoreWidth, readMoreHeight;
             std::string readMore = " Read More";
@@ -228,8 +283,11 @@ void SDLUI::renderWrappedText(const std::string& text, const SDL_Rect& bounds, c
     }
 }
 
+/**
+ * @brief Renders the list of available games on the screen.
+ */
 void SDLUI::renderGameList() {
-    // Clear screen
+    // Clear the screen
     SDL_SetRenderDrawColor(renderer, backgroundColor.r, backgroundColor.g, backgroundColor.b, backgroundColor.a);
     SDL_RenderClear(renderer);
 
@@ -238,88 +296,51 @@ void SDLUI::renderGameList() {
     for (size_t i = 0; i < gameList.size(); ++i) {
         const auto& game = gameList[i];
         
-        // Draw selection highlight
+        // Draw selection background if this is the selected item
         if (i == selectedIndex) {
             SDL_SetRenderDrawColor(renderer, selectedColor.r, selectedColor.g, selectedColor.b, selectedColor.a);
-            SDL_Rect highlightRect = {10, y - GAME_ITEM_PADDING/2, WINDOW_WIDTH - 20, GAME_ITEM_HEIGHT};
-            SDL_RenderFillRect(renderer, &highlightRect);
+            SDL_Rect selectionRect = {0, y - 5, WINDOW_WIDTH, GAME_ITEM_HEIGHT + 10};
+            SDL_RenderFillRect(renderer, &selectionRect);
         }
-        
-        // Try to load game cover
-        SDL_Texture* coverTexture = nullptr;
+
+        // Render game cover image
         if (!game.imagePath.empty()) {
-            coverTexture = loadTextureFromFile(game.imagePath);
-        }
-        
-        int textX = 20;
-        if (coverTexture) {
-            // Render cover image
-            SDL_Rect coverRect = {20, y, COVER_IMAGE_SIZE, COVER_IMAGE_SIZE};
-            SDL_RenderCopy(renderer, coverTexture, NULL, &coverRect);
-            SDL_DestroyTexture(coverTexture);
-            textX = TEXT_START_X;  // Use the new constant
-        }
-        
-        // Render text
-        renderText(game.title, textX, y, textColor);
-        std::string info = game.releaseYear + " | " + game.publisher + " | " + game.genre;
-        renderText(info, textX, y + 25, textColor);
-        
-        // Render description
-        SDL_Rect descriptionBounds = {
-            textX, y + 50,
-            WINDOW_WIDTH - (textX + 20),
-            MAX_DESCRIPTION_LINES * DESCRIPTION_LINE_HEIGHT
-        };
-        
-        // Only show "Read More" for games with IGDB URLs
-        if (!game.igdbUrl.empty()) {
-            renderWrappedText(game.description, descriptionBounds, textColor);
-        } else {
-            // For non-IGDB games, just render the first two lines without "Read More"
-            std::string remainingText = game.description;
-            int lineY = y + 50;
-            int linesRendered = 0;
-            
-            while (!remainingText.empty() && linesRendered < MAX_DESCRIPTION_LINES) {
-                int textWidth, textHeight;
-                TTF_SizeText(font, remainingText.c_str(), &textWidth, &textHeight);
-                
-                if (textWidth <= 0 || remainingText.empty()) break;
-                
-                int charsPerLine = std::max(1, (descriptionBounds.w * (int)remainingText.length()) / textWidth);
-                charsPerLine = std::min(charsPerLine, (int)remainingText.length());
-                
-                size_t lineEnd = remainingText.find_last_of(" \n", charsPerLine);
-                if (lineEnd == std::string::npos || lineEnd > charsPerLine) {
-                    lineEnd = charsPerLine;
-                }
-                
-                lineEnd = std::min(lineEnd, remainingText.length());
-                std::string line = remainingText.substr(0, lineEnd);
-                renderText(line, textX, lineY, textColor);
-                
-                lineY += DESCRIPTION_LINE_HEIGHT;
-                linesRendered++;
-                
-                if (lineEnd >= remainingText.length()) break;
-                remainingText = remainingText.substr(lineEnd + 1);
+            SDL_Texture* coverTexture = loadTextureFromFile(game.imagePath);
+            if (coverTexture) {
+                SDL_Rect coverRect = {GAME_ITEM_PADDING, y, COVER_IMAGE_SIZE, COVER_IMAGE_SIZE};
+                SDL_RenderCopy(renderer, coverTexture, NULL, &coverRect);
             }
         }
-        
+
+        // Render game title
+        renderText(game.title, TEXT_START_X, y, textColor);
+
+        // Render game details in one line
+        std::string details = game.releaseYear + " | " + game.publisher + " | " + game.genre;
+        renderText(details, TEXT_START_X, y + 25, textColor);
+
+        // Render description with Read More link only if game is found in IGDB
+        SDL_Rect descBounds = {TEXT_START_X, y + 50, WINDOW_WIDTH - TEXT_START_X - GAME_ITEM_PADDING, 40};
+        if (!game.igdbUrl.empty()) {
+            // Game found in IGDB, show description with Read More
+            renderWrappedText(game.description + " Read More", descBounds, textColor);
+        } else {
+            // Game not found in IGDB, show description without Read More
+            renderWrappedText(game.description, descBounds, textColor);
+        }
+
         y += GAME_ITEM_HEIGHT + GAME_ITEM_PADDING;
     }
-    
+
     SDL_RenderPresent(renderer);
 }
 
+/**
+ * @brief Handles user input, such as keyboard and mouse events.
+ */
 void SDLUI::handleInput() {
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
-        // Variables used in multiple case blocks
-        bool isOverLink = false;
-        int y = GAME_ITEM_PADDING;
-        
         switch (event.type) {
             case SDL_QUIT:
                 selectedIndex = -1;  // Signal to exit
@@ -342,93 +363,44 @@ void SDLUI::handleInput() {
                 }
                 break;
                 
-            case SDL_MOUSEMOTION:
-                // Check if mouse is over a "Read More" link
-                for (size_t i = 0; i < gameList.size(); ++i) {
-                    const auto& game = gameList[i];
-                    if (!game.igdbUrl.empty()) {
-                        int textX = 20;
-                        if (!game.imagePath.empty()) {
-                            textX = TEXT_START_X;
-                        }
-                        
-                        // Calculate the position of the "Read More" link
-                        int linkY = y + 50 + DESCRIPTION_LINE_HEIGHT;
-                        
-                        // Calculate the width of the current line
-                        int textWidth, textHeight;
-                        std::string line = game.description;
-                        TTF_SizeText(font, line.c_str(), &textWidth, &textHeight);
-                        
-                        // Calculate the position of "Read More"
-                        int readMoreWidth;
-                        std::string readMore = " Read More";
-                        TTF_SizeText(font, readMore.c_str(), &readMoreWidth, &textHeight);
-                        
-                        // Check if mouse is within the link area
-                        if (event.motion.x >= textX + textWidth && 
-                            event.motion.x <= textX + textWidth + readMoreWidth + 5 &&  // Add padding
-                            event.motion.y >= linkY && 
-                            event.motion.y <= linkY + DESCRIPTION_LINE_HEIGHT) {
-                            isOverLink = true;
-                            break;
-                        }
-                    }
-                    y += GAME_ITEM_HEIGHT + GAME_ITEM_PADDING;
-                }
-                
-                // Change cursor based on whether we're over a link
-                if (isOverLink) {
-                    SDL_SetCursor(SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_HAND));
-                } else {
-                    SDL_SetCursor(SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_ARROW));
-                }
-                break;
-                
             case SDL_MOUSEBUTTONDOWN:
                 if (event.button.button == SDL_BUTTON_LEFT) {
-                    // Check if click is on a "Read More" link
-                    y = GAME_ITEM_PADDING;  // Reset y for the click check
+                    // Calculate which game item was clicked
+                    int clickY = event.button.y;
+                    int itemY = GAME_ITEM_PADDING;
+                    
                     for (size_t i = 0; i < gameList.size(); ++i) {
                         const auto& game = gameList[i];
-                        if (!game.igdbUrl.empty()) {
-                            int textX = 20;
-                            if (!game.imagePath.empty()) {
-                                textX = TEXT_START_X;
-                            }
+                        
+                        // Check if click is in the description area and game has IGDB URL
+                        if (!game.igdbUrl.empty() && 
+                            clickY >= itemY + 50 && 
+                            clickY <= itemY + 90 && 
+                            event.button.x >= TEXT_START_X) {
                             
-                            // Calculate the position of the "Read More" link
-                            int linkY = y + 50 + DESCRIPTION_LINE_HEIGHT;
-                            
-                            // Calculate the width of the current line
-                            int textWidth, textHeight;
-                            std::string line = game.description;
-                            TTF_SizeText(font, line.c_str(), &textWidth, &textHeight);
-                            
-                            // Calculate the position of "Read More"
-                            int readMoreWidth;
-                            std::string readMore = " Read More";
-                            TTF_SizeText(font, readMore.c_str(), &readMoreWidth, &textHeight);
-                            
-                            // Check if click is within the link area
-                            if (event.button.x >= textX + textWidth && 
-                                event.button.x <= textX + textWidth + readMoreWidth + 5 &&  // Add padding
-                                event.button.y >= linkY && 
-                                event.button.y <= linkY + DESCRIPTION_LINE_HEIGHT) {
-                                
-                                // Open the URL in the default browser
+                            // Open the URL in the default browser
+                            #ifdef _WIN32
+                                std::string command = "start " + game.igdbUrl;
+                            #else
                                 std::string command = "xdg-open \"" + game.igdbUrl + "\"";
-                                system(command.c_str());
-                                return;
-                            }
+                            #endif
+                            system(command.c_str());
+                            return;
                         }
-                        y += GAME_ITEM_HEIGHT + GAME_ITEM_PADDING;
+                        
+                        itemY += GAME_ITEM_HEIGHT + GAME_ITEM_PADDING;
                     }
                 }
                 break;
         }
     }
 }
+
+/**
+ * @brief Displays the game list and handles user interaction.
+ * @param games A vector containing game filenames.
+ * @return The index of the selected game, or -1 if the user exits.
+ */
 
 int SDLUI::displayGameList(const std::vector<std::string>& games) {
     loadGameMetadata(games);
@@ -449,6 +421,11 @@ int SDLUI::displayGameList(const std::vector<std::string>& games) {
         SDL_Delay(16);  // Cap at ~60 FPS
     }
 }
+
+/**
+ * @brief Displays an error message on the screen.
+ * @param message The error message to display.
+ */
 
 void SDLUI::showError(const std::string& message) {
     // Clear screen
@@ -474,7 +451,9 @@ void SDLUI::showError(const std::string& message) {
         SDL_Delay(16);
     }
 }
-
+/**
+ * @brief Cleans up SDL resources before exiting.
+ */
 void SDLUI::cleanup() {
     if (font) {
         TTF_CloseFont(font);
@@ -492,4 +471,48 @@ void SDLUI::cleanup() {
     IMG_Quit();
     SDL_Quit();
     initialized = false;
+}
+
+void SDLUI::clearTextureCache() {
+    for (auto& pair : textureCache) {
+        if (pair.second) {
+            SDL_DestroyTexture(pair.second);
+        }
+    }
+    textureCache.clear();
+
+    for (auto& pair : textTextureCache) {
+        if (pair.second) {
+            SDL_DestroyTexture(pair.second);
+        }
+    }
+    textTextureCache.clear();
+}
+
+SDL_Texture* SDLUI::getOrCreateTextTexture(const std::string& text, const SDL_Color& color) {
+    // Create a unique key for the text and color
+    std::string key = text + std::to_string(color.r) + std::to_string(color.g) + 
+                     std::to_string(color.b) + std::to_string(color.a);
+    
+    auto it = textTextureCache.find(key);
+    if (it != textTextureCache.end()) {
+        return it->second;
+    }
+
+    SDL_Surface* surface = TTF_RenderText_Blended(font, text.c_str(), color);
+    if (!surface) {
+        std::cerr << "Failed to render text surface! TTF_Error: " << TTF_GetError() << std::endl;
+        return nullptr;
+    }
+
+    SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, surface);
+    if (!texture) {
+        std::cerr << "Failed to create texture from rendered text! SDL Error: " << SDL_GetError() << std::endl;
+        SDL_FreeSurface(surface);
+        return nullptr;
+    }
+
+    SDL_FreeSurface(surface);
+    textTextureCache[key] = texture;
+    return texture;
 } 

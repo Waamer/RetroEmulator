@@ -1,3 +1,9 @@
+/**
+ * @file sdl_ui.h
+ * @brief Implementation of the SDLUI class for rendering a game launcher UI using SDL.
+ * @author Talha and Waleed
+ */
+
 #pragma once
 #include <SDL.h>
 #include <SDL_ttf.h>
@@ -5,6 +11,7 @@
 #include <vector>
 #include "game_metadata.h"
 #include "igdb_client.h"
+#include <unordered_map>
 
 class SDLUI {
 public:
@@ -45,9 +52,15 @@ private:
     SDL_Color errorColor;
     SDL_Color linkColor;
 
+    // Texture caching
+    std::unordered_map<std::string, SDL_Texture*> textureCache;
+    std::unordered_map<std::string, SDL_Texture*> textTextureCache;
+
     void renderText(const std::string& text, int x, int y, const SDL_Color& color);
     void renderWrappedText(const std::string& text, const SDL_Rect& bounds, const SDL_Color& color);
     void renderGameList();
     void handleInput();
     SDL_Texture* loadTextureFromFile(const std::string& path);
+    SDL_Texture* getOrCreateTextTexture(const std::string& text, const SDL_Color& color);
+    void clearTextureCache();
 }; 

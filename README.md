@@ -36,6 +36,7 @@ cd retro-console
 mkdir build
 cd build
 cmake ..
+cmake .. ['Sometimes needs to be run twice']
 make
 ```
 

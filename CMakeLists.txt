@@ -28,6 +28,7 @@ add_executable(retro_console
     src/sdl_ui.cpp
     src/emulator_launcher.cpp
     src/igdb_client.cpp
+    src/save_manager.cpp
 )
 
 target_link_libraries(retro_console 

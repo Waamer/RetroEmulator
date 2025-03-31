@@ -1,3 +1,13 @@
+/**
+ * @file igdb_client.h
+ * @brief Implementation of the IGDBClient class for interfacing with the IGDB API.
+ * 
+ * This class provides functionality for authenticating with IGDB, making API requests,
+ * downloading game covers, and extracting game metadata.
+ * 
+ * @author Jagjot and Waleed
+ */
+
 #pragma once
 #include <string>
 #include <curl/curl.h>
@@ -16,7 +26,8 @@ public:
 private:
     CURL* curl;
     std::string access_token;
-    
+    std::string client_id;
+    std::string client_secret;
     static size_t WriteCallback(void* contents, size_t size, size_t nmemb, void* userp);
     std::string makeIGDBRequest(const std::string& endpoint, const std::string& query);
     bool authenticate();

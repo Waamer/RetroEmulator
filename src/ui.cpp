@@ -2,6 +2,7 @@
  * @file ui.cpp
  * Implements a simple console-based user interface for the retro game emulator launcher.
  * Handles game list display, user input, and error messages.
+ * @author Talha
  */
 
 #include "ui.h"
@@ -10,19 +11,19 @@
 #include <cstdlib>
 
 /**
- * Constructor initializes UI system in uninitialized state
+ * @brief Constructor initializes UI system in uninitialized state
  */
 UI::UI() : initialized(false) {}
 
 /**
- * Destructor ensures cleanup is performed
+ * @brief Destructor ensures cleanup is performed
  */
 UI::~UI() {
     cleanup();
 }
 
 /**
- * Initializes the UI system
+ * @brief Initializes the UI system
  * @return true if initialization successful
  */
 bool UI::init() {
@@ -31,14 +32,14 @@ bool UI::init() {
 }
 
 /**
- * Cleans up UI resources
+ * @brief Cleans up UI resources
  */
 void UI::cleanup() {
     initialized = false;
 }
 
 /**
- * Displays the list of available games and handles user selection
+ * @brief Displays the list of available games and handles user selection
  * @param games Vector of game filenames to display
  * @return Selected game index or -1 for exit
  */
@@ -71,7 +72,7 @@ int UI::displayGameList(const std::vector<std::string>& games) {
 }
 
 /**
- * Displays an error message and waits for user acknowledgment
+ * @brief Displays an error message and waits for user acknowledgment
  * @param message Error message to display
  */
 void UI::showError(const std::string& message) {
@@ -81,7 +82,7 @@ void UI::showError(const std::string& message) {
 }
 
 /**
- * Gets validated numeric input from the user within specified range
+ * @brief Gets validated numeric input from the user within specified range
  * @param min Minimum acceptable value
  * @param max Maximum acceptable value
  * @return User's validated input
@@ -103,7 +104,7 @@ int UI::getNumericInput(int min, int max) {
 }
 
 /**
- * Clears the console screen in a platform-independent way
+ * @brief Clears the console screen in a platform-independent way
  * Uses 'cls' for Windows and 'clear' for Unix-like systems
  */
 void UI::clearScreen() {

@@ -1,3 +1,10 @@
+/**
+ * @file ui.h
+ * Implements a simple console-based user interface for the retro game emulator launcher.
+ * Handles game list display, user input, and error messages.
+ * @author Talha
+ */
+
 #pragma once
 #include <string>
 #include <vector>

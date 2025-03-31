@@ -1,6 +1,12 @@
 /**
  * @file emulator_launcher.cpp
- * Implements functionality for launching and managing an external game emulator.
+ * @brief Implements functionality for launching and managing an external game emulator.
+ *
+ * This file contains the implementation of the EmulatorLauncher class,
+ * which provides methods for initializing an emulator, launching games,
+ * validating ROM files, and handling errors.
+ *
+ * @author Shiv
  */
 
 #include "emulator_launcher.h"
@@ -8,26 +14,37 @@
 #include <cstdlib>
 
 /**
- * Constructor initializes the emulator launcher with uninitialized state
+ * @class EmulatorLauncher
+ * @brief Manages launching an external emulator and running game ROMs.
+ *
+ * The EmulatorLauncher class is responsible for initializing an emulator,
+ * validating ROM files, launching games, and managing errors related to the process.
+ */
+
+/**
+ * @brief Constructs an EmulatorLauncher object with an uninitialized state.
+ *
+ * The emulator is not initialized until the init() method is called with
+ * a valid emulator path.
  */
 EmulatorLauncher::EmulatorLauncher() : initialized(false) {}
 
 /**
- * Destructor - no special cleanup needed
+ * @brief Destructor for EmulatorLauncher.
+ *
+ * Cleans up resources if necessary. Currently, no special cleanup is required.
  */
 EmulatorLauncher::~EmulatorLauncher() {}
 
 /**
- * Initializes the emulator with the specified path
- * @param path Path to the emulator executable
- * @return true if initialization successful, false otherwise
+ * @brief Initializes the emulator with the specified path.
+ *
+ * @param path Path to the emulator executable.
+ * @return true if initialization is successful, false otherwise.
  */
 bool EmulatorLauncher::init(const std::string& path) {
-    // Check if emulator exists in PATH or use provided path
     emulatorPath = path;
     
-    // Basic validation - in a real implementation, we would verify the emulator
-    // exists and is executable
     if (emulatorPath.empty()) {
         setError("No emulator path specified");
         return false;
@@ -38,9 +55,10 @@ bool EmulatorLauncher::init(const std::string& path) {
 }
 
 /**
- * Launches a game ROM using the initialized emulator
- * @param romPath Path to the ROM file to launch
- * @return true if game launched successfully, false otherwise
+ * @brief Launches a game ROM using the initialized emulator.
+ *
+ * @param romPath Path to the ROM file to launch.
+ * @return true if the game launches successfully, false otherwise.
  */
 bool EmulatorLauncher::launchGame(const std::filesystem::path& romPath) {
     if (!initialized) {
@@ -52,7 +70,6 @@ bool EmulatorLauncher::launchGame(const std::filesystem::path& romPath) {
         return false;
     }
     
-    // Construct command to launch emulator with ROM
     std::string command;
     #ifdef _WIN32
         command = "start \"\" \"" + emulatorPath + "\" \"" + romPath.string() + "\"";
@@ -60,7 +77,6 @@ bool EmulatorLauncher::launchGame(const std::filesystem::path& romPath) {
         command = "\"" + emulatorPath + "\" \"" + romPath.string() + "\" &";
     #endif
     
-    // Launch the emulator
     int result = std::system(command.c_str());
     if (result != 0) {
         setError("Failed to launch emulator");
@@ -71,9 +87,10 @@ bool EmulatorLauncher::launchGame(const std::filesystem::path& romPath) {
 }
 
 /**
- * Validates if the ROM file exists and has the correct file extension (.nes)
- * @param romPath Path to the ROM file to validate
- * @return true if ROM is valid, false otherwise
+ * @brief Validates if the ROM file exists and has the correct file extension (.nes).
+ *
+ * @param romPath Path to the ROM file to validate.
+ * @return true if the ROM file is valid, false otherwise.
  */
 bool EmulatorLauncher::validateRom(const std::filesystem::path& romPath) {
     if (!std::filesystem::exists(romPath)) {
@@ -81,7 +98,6 @@ bool EmulatorLauncher::validateRom(const std::filesystem::path& romPath) {
         return false;
     }
     
-    // Check file extension
     if (romPath.extension() != ".nes") {
         setError("Invalid ROM file type: " + romPath.string());
         return false;
@@ -91,16 +107,18 @@ bool EmulatorLauncher::validateRom(const std::filesystem::path& romPath) {
 }
 
 /**
- * Retrieves the last error message if any operation failed
- * @return String containing the last error message
+ * @brief Retrieves the last error message if any operation fails.
+ *
+ * @return A string containing the last recorded error message.
  */
 std::string EmulatorLauncher::getLastError() const {
     return lastError;
 }
 
 /**
- * Sets the error message when an operation fails
- * @param error Error message to store
+ * @brief Sets the error message when an operation fails.
+ *
+ * @param error The error message to store.
  */
 void EmulatorLauncher::setError(const std::string& error) {
     lastError = error;

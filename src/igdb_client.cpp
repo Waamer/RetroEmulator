@@ -1,3 +1,13 @@
+/**
+ * @file igdb_client.cpp
+ * @brief Implementation of the IGDBClient class for interfacing with the IGDB API.
+ * 
+ * This class provides functionality for authenticating with IGDB, making API requests,
+ * downloading game covers, and extracting game metadata.
+ * 
+ * @author Jagjot and Waleed
+ */
+
 #include "igdb_client.h"
 #include <iostream>
 #include <sstream>
@@ -6,21 +16,47 @@
 
 namespace fs = std::filesystem;
 
-IGDBClient::IGDBClient() : curl(nullptr) {
+/**
+ * @brief Constructor for IGDBClient.
+ * 
+ * Initializes the CURL session.
+ */
+IGDBClient::IGDBClient() : curl(nullptr), client_id(""), client_secret("") {
     curl = curl_easy_init();
 }
 
+/**
+ * @brief Destructor for IGDBClient.
+ * 
+ * Cleans up the CURL session if initialized.
+ */
 IGDBClient::~IGDBClient() {
     if (curl) {
         curl_easy_cleanup(curl);
     }
 }
 
+/**
+ * @brief Callback function for handling CURL responses.
+ * 
+ * @param contents Pointer to the data received.
+ * @param size Size of each data chunk.
+ * @param nmemb Number of data chunks.
+ * @param userp Pointer to user-defined storage for response.
+ * @return Number of bytes processed.
+ */
 size_t IGDBClient::WriteCallback(void* contents, size_t size, size_t nmemb, void* userp) {
     ((std::string*)userp)->append((char*)contents, size * nmemb);
     return size * nmemb;
 }
 
+/**
+ * @brief Initializes the IGDB client and attempts authentication.
+ * 
+ * @param client_id IGDB API client ID.
+ * @param client_secret IGDB API client secret.
+ * @return True if initialization and authentication succeed, false otherwise.
+ */
 bool IGDBClient::init(const std::string& client_id, const std::string& client_secret) {
     std::cout << "Initializing IGDB client..." << std::endl;
     
@@ -29,34 +65,46 @@ bool IGDBClient::init(const std::string& client_id, const std::string& client_se
         return false;
     }
 
-    // Set timeout values to prevent hanging
-    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10L);  // 10 seconds timeout for the entire request
-    curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 5L);  // 5 seconds timeout for the connection phase
+    this->client_id = client_id;
+    this->client_secret = client_secret;
 
-    // Create images directory if it doesn't exist
+    // Increase timeouts for better reliability
+    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 30L);
+    curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10L);
+    curl_easy_setopt(curl, CURLOPT_LOW_SPEED_TIME, 10L);
+    curl_easy_setopt(curl, CURLOPT_LOW_SPEED_LIMIT, 1L);
+
     try {
         if (!fs::exists("images")) {
             fs::create_directory("images");
         }
     } catch (const std::exception& e) {
         std::cerr << "Failed to create images directory: " << e.what() << std::endl;
-        // Continue anyway, we'll handle image saving failures later
     }
 
     return authenticate();
 }
 
+/**
+ * @brief Authenticates with IGDB API and retrieves an access token.
+ * 
+ * @return True if authentication is successful, false otherwise.
+ */
 bool IGDBClient::authenticate() {
     std::cout << "Authenticating with IGDB..." << std::endl;
     
-    // Set SSL verification options
+    // Reset all options before authentication
+    curl_easy_reset(curl);
+    
     curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
     curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
+    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 30L);
+    curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10L);
+    curl_easy_setopt(curl, CURLOPT_LOW_SPEED_TIME, 10L);
+    curl_easy_setopt(curl, CURLOPT_LOW_SPEED_LIMIT, 1L);
     
     std::string auth_url = "https://id.twitch.tv/oauth2/token";
-    std::string post_data = "client_id=sa09yuxskyo4guu5d1pgntjoc3ucw0"
-                           "&client_secret=wu99x3crhhckdbqb41hw5u7q4sjbao"
-                           "&grant_type=client_credentials";
+    std::string post_data = "client_id=" + client_id + "&client_secret=" + client_secret + "&grant_type=client_credentials";
 
     std::string response;
     curl_easy_setopt(curl, CURLOPT_URL, auth_url.c_str());
@@ -65,40 +113,36 @@ bool IGDBClient::authenticate() {
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
 
-    std::cout << "Sending authentication request..." << std::endl;
     CURLcode res = curl_easy_perform(curl);
     
     if (res != CURLE_OK) {
         std::cerr << "Failed to authenticate: " << curl_easy_strerror(res) << std::endl;
-        std::cerr << "Continuing without IGDB integration" << std::endl;
         return false;
     }
 
-    std::cout << "Got response from authentication server" << std::endl;
-    
     try {
         auto json = nlohmann::json::parse(response);
         if (!json.contains("access_token")) {
             std::cerr << "Authentication response missing access token" << std::endl;
-            std::cerr << "Response: " << response << std::endl;
-            std::cerr << "Continuing without IGDB integration" << std::endl;
             return false;
         }
         access_token = json["access_token"];
-        std::cout << "Successfully authenticated with IGDB" << std::endl;
         return true;
     } catch (const std::exception& e) {
         std::cerr << "Failed to parse authentication response: " << e.what() << std::endl;
-        std::cerr << "Response: " << response << std::endl;
-        std::cerr << "Continuing without IGDB integration" << std::endl;
         return false;
     }
 }
 
+/**
+ * @brief Cleans a game filename by removing extensions and formatting.
+ * 
+ * @param filename The raw filename.
+ * @return A cleaned version of the game name.
+ */
 std::string IGDBClient::cleanGameName(const std::string& filename) {
     std::string name = filename.substr(0, filename.find_last_of('.'));
     std::replace(name.begin(), name.end(), '_', ' ');
-    // Remove common suffixes like (U), (E), (J), etc.
     size_t pos = name.find(" (");
     if (pos != std::string::npos) {
         name = name.substr(0, pos);
@@ -106,16 +150,30 @@ std::string IGDBClient::cleanGameName(const std::string& filename) {
     return name;
 }
 
+/**
+ * @brief Sends a request to the IGDB API.
+ * 
+ * @param endpoint The API endpoint to call.
+ * @param query The query to send.
+ * @return The response from IGDB.
+ */
 std::string IGDBClient::makeIGDBRequest(const std::string& endpoint, const std::string& query) {
     std::string url = "https://api.igdb.com/v4/" + endpoint;
     std::string response;
-
-    std::cout << "Making IGDB request to: " << url << std::endl;
-    std::cout << "Query: " << query << std::endl;
-
+    
+    // Reset all options before making request
+    curl_easy_reset(curl);
+    
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
+    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 30L);
+    curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10L);
+    curl_easy_setopt(curl, CURLOPT_LOW_SPEED_TIME, 10L);
+    curl_easy_setopt(curl, CURLOPT_LOW_SPEED_LIMIT, 1L);
+    
     struct curl_slist* headers = nullptr;
     headers = curl_slist_append(headers, ("Authorization: Bearer " + access_token).c_str());
-    headers = curl_slist_append(headers, "Client-ID: sa09yuxskyo4guu5d1pgntjoc3ucw0");
+    headers = curl_slist_append(headers, ("Client-ID: " + client_id).c_str());
     headers = curl_slist_append(headers, "Content-Type: text/plain");
 
     curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
@@ -132,10 +190,16 @@ std::string IGDBClient::makeIGDBRequest(const std::string& endpoint, const std::
         return "";
     }
 
-    std::cout << "IGDB Response: " << response << std::endl;
     return response;
 }
 
+/**
+ * @brief Downloads game cover image
+ * 
+ * @param url The url of image to download
+ * @param output_path The path where the downloaded image shall be stored
+ * @return True if downloaded, False is not
+ */
 bool IGDBClient::downloadGameCover(const std::string& url, const std::string& output_path) {
     if (url.empty()) return false;
 
@@ -192,6 +256,12 @@ bool IGDBClient::downloadGameCover(const std::string& url, const std::string& ou
     }
 }
 
+/**
+ * @brief Extracts metadata from given file.
+ * 
+ * @param filename File from which metadata will be extracted from.
+ * @return GameMetadata from file.
+ */
 GameMetadata IGDBClient::extractMetadataFromFilename(const std::string& filename) {
     GameMetadata metadata;
     metadata.filename = filename;
@@ -225,6 +295,12 @@ GameMetadata IGDBClient::extractMetadataFromFilename(const std::string& filename
     return metadata;
 }
 
+/**
+ * @brief Get the metadata from a game 
+ * 
+ * @param game_name Name of game to fetch metadata from
+ * @return GameMetadata from game
+ */
 GameMetadata IGDBClient::fetchGameMetadata(const std::string& game_name) {
     GameMetadata metadata;
     metadata.filename = game_name;
